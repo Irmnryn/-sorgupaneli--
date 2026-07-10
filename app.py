@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 
@@ -7,36 +8,74 @@ import pandas as pd
 st.set_page_config(
     page_title="Sorgu Paneli",
     page_icon="",
-    layout="centered",
+    layout="wide",
 )
 
 # ------------------------------------------------------------
-# ÖZEL GÖRÜNÜM (CSS)
+# ÖZEL GÖRÜNÜM (CSS) — daha büyük yazılar, geniş dosya yükleme alanı
 # ------------------------------------------------------------
 st.markdown(
     """
     <style>
     .baslik {
         text-align: center;
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 2.6rem;
+        font-weight: 800;
         margin-bottom: 0.2rem;
     }
     .altbaslik {
         text-align: center;
         color: #6b7280;
-        margin-bottom: 2rem;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
     }
+    /* Dosya yükleme kutusu: büyük, mor, kesikli çerçeve */
     div[data-testid="stFileUploaderDropzone"] {
-        border: 2px dashed #4f46e5;
-        border-radius: 16px;
-        padding: 2rem;
+        border: 3px dashed #4f46e5;
+        border-radius: 18px;
+        padding: 2.5rem;
         background-color: #f5f6ff;
+    }
+    div[data-testid="stFileUploaderDropzone"] * {
+        font-size: 1.15rem !important;
+    }
+    /* Arama kutusu: büyük yazı, büyük kutu */
+    div[data-testid="stTextInput"] input {
+        font-size: 1.4rem !important;
+        padding: 0.9rem 1rem !important;
+        border-radius: 12px !important;
+        border: 2px solid #4f46e5 !important;
+    }
+    /* Sonuç tablosu başlığı (expander) büyük yazı */
+    div[data-testid="stExpander"] summary {
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+    }
+    /* Tablo hücrelerindeki yazı biraz büyüsün */
+    div[data-testid="stDataFrame"] * {
+        font-size: 1.02rem !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# ------------------------------------------------------------
+# TÜRKÇE BÜYÜK/KÜÇÜK HARF + BOŞLUK DUYARSIZ NORMALLEŞTİRME
+# ------------------------------------------------------------
+TR_DEGISIM = {"İ": "i", "I": "ı", "Ş": "ş", "Ğ": "ğ", "Ü": "ü", "Ö": "ö", "Ç": "ç"}
+
+
+def normallestir(metin: str) -> str:
+    """Türkçe karaktere duyarlı biçimde küçük harfe çevirir ve TÜM boşlukları siler.
+    Böylece 'Model Teknoloji', 'MODEL  TEKNOLOJİ', 'modelteknoloji' hepsi eşleşir."""
+    metin = str(metin)
+    for buyuk, kucuk in TR_DEGISIM.items():
+        metin = metin.replace(buyuk, kucuk)
+    metin = metin.lower()
+    metin = re.sub(r"\s+", "", metin)
+    return metin
+
 
 # ------------------------------------------------------------
 # BAŞLIK
@@ -53,16 +92,15 @@ st.markdown(
 yuklenen_dosya = st.file_uploader(
     "Excel dosyanızı buraya sürükleyin ya da seçmek için tıklayın",
     type=["xlsx", "xls"],
-    label_visibility="visible",
 )
 
 # ------------------------------------------------------------
-# 2) SABİT ARAMA ÇUBUĞU (dosya yüklenmese de görünür durur)
+# 2) SABİT ARAMA ÇUBUĞU
 # ------------------------------------------------------------
 st.write("")
 arama_terimi = st.text_input(
     "🔍 Arama",
-    placeholder="Aramak istediğiniz firma / kelimeyi yazın...",
+    placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... ",
     disabled=(yuklenen_dosya is None),
     label_visibility="collapsed",
 )
@@ -85,24 +123,38 @@ df = df.fillna("")
 st.success(f"'{yuklenen_dosya.name}' yüklendi — {len(df):,} satır, {len(df.columns)} sütun bulundu.")
 
 # ------------------------------------------------------------
-# 4) ARAMA MANTIĞI
+# 4) ARAMA MANTIĞI (boşluk / büyük-küçük harf duyarsız)
 # ------------------------------------------------------------
 if arama_terimi:
-    sonuclar = df[
-        df.astype(str)
-        .apply(lambda satir: satir.str.contains(arama_terimi, case=False, na=False))
-        .any(axis=1)
-    ]
+    aranan = normallestir(arama_terimi)
+
+    # Her satırın TÜM sütunlarını tek bir normalleştirilmiş metinde birleştiriyoruz,
+    # sonra aranan kelime bu metnin içinde geçiyor mu diye bakıyoruz.
+    satir_metinleri = df.astype(str).apply(
+        lambda satir: normallestir(" ".join(satir.values)), axis=1
+    )
+    sonuclar = df[satir_metinleri.str.contains(re.escape(aranan), na=False)]
     baslik_metni = f"🔎 '{arama_terimi}' için {len(sonuclar):,} sonuç bulundu"
 else:
     sonuclar = df
     baslik_metni = f"📋 Tüm kayıtlar ({len(sonuclar):,} satır)"
 
 # ------------------------------------------------------------
-# 5) SONUÇLAR — AÇILIR PANELDE (dosya/arama değiştikçe otomatik açık)
+# 5) SONUÇLAR — GENİŞ, KAYDIRMASIZ, TÜM SATIRLARIN SIĞDIĞI TABLO
 # ------------------------------------------------------------
 with st.expander(baslik_metni, expanded=True):
-    st.dataframe(sonuclar, use_container_width=True, hide_index=True)
+    # Tüm satırların kaydırma olmadan görünmesi için tablo yüksekliğini
+    # satır sayısına göre otomatik hesaplıyoruz.
+    satir_yuksekligi = 35
+    tablo_yuksekligi = (len(sonuclar) + 1) * satir_yuksekligi + 3
+    tablo_yuksekligi = min(tablo_yuksekligi, 2000)  # aşırı uzamasın diye üst sınır
+
+    st.dataframe(
+        sonuclar,
+        use_container_width=True,
+        hide_index=True,
+        height=tablo_yuksekligi,
+    )
 
     csv_veri = sonuclar.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
@@ -112,10 +164,9 @@ with st.expander(baslik_metni, expanded=True):
         mime="text/csv",
     )
 
-    # --------------------------------------------------------
-    # 6) DETAY GÖRÜNÜMÜ (hangi sütunlar geleceği bilinmediği için
-    #    her satırı ilk birkaç sütunundan oluşan bir etiketle listeliyoruz)
-    # --------------------------------------------------------
+    # ----------------------------------------------------------
+    # 6) DETAY GÖRÜNÜMÜ
+    # ----------------------------------------------------------
     if len(sonuclar) > 0:
         st.divider()
         st.markdown("**Bir kaydın tüm ayrıntılarını görmek için seçin:**")
@@ -129,7 +180,7 @@ with st.expander(baslik_metni, expanded=True):
         secenekler = {"— Kayıt seçin —": None}
         for orijinal_index, satir in sonuclar.iterrows():
             etiket = satir_etiketi(satir) or f"Kayıt #{orijinal_index}"
-            secenekler[f"{etiket}"] = orijinal_index
+            secenekler[etiket] = orijinal_index
 
         secilen_etiket = st.selectbox("Kayıt", list(secenekler.keys()), label_visibility="collapsed")
         secilen_index = secenekler[secilen_etiket]
