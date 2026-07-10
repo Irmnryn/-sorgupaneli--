@@ -1,164 +1,142 @@
 import streamlit as st
 import pandas as pd
-import re
-from pathlib import Path
 
 # ------------------------------------------------------------
 # SAYFA AYARLARI
 # ------------------------------------------------------------
 st.set_page_config(
-    page_title=" MTSO Sorgu Portalı",
+    page_title="Sorgu Paneli",
     page_icon="",
-    layout="wide",
+    layout="centered",
 )
 
-VERI_YOLU = Path(__file__).parent / "veri" / "uyeler.xlsx"
-
-
 # ------------------------------------------------------------
-# VERİYİ OKUMA (cache'lenir, her aramada Excel'i yeniden okumaz)
+# ÖZEL GÖRÜNÜM (CSS)
 # ------------------------------------------------------------
-@st.cache_data
-def veri_yukle():
-    df = pd.read_excel(VERI_YOLU)
-
-    # Telefon sütunlarını okunabilir metne çevir (3242374000 -> 0324 237 40 00)
-    def telefon_formatla(deger):
-        if pd.isna(deger):
-            return ""
-        rakamlar = re.sub(r"\D", "", str(int(deger)))
-        if len(rakamlar) == 10:
-            rakamlar = "0" + rakamlar
-        if len(rakamlar) == 11:
-            return f"{rakamlar[0:4]} {rakamlar[4:7]} {rakamlar[7:9]} {rakamlar[9:11]}"
-        return str(deger)
-
-    if "isTel" in df.columns:
-        df["isTel"] = df["isTel"].apply(telefon_formatla)
-    if "burotel" in df.columns:
-        df["burotel"] = df["burotel"].apply(telefon_formatla)
-
-    # Boş hücreleri düzgün göster
-    df = df.fillna("")
-    return df
-
-
-df = veri_yukle()
-
-# Ekranda gösterilecek sütun adları (kullanıcı dostu Türkçe başlıklar)
-SUTUN_ADLARI = {
-    "Sıra": "Sıra",
-    "ticaretSicilNo": "Ticaret Sicil No",
-    "uyeOdaSicilNo": "Oda Sicil No",
-    "unvan": "Ünvan",
-    "adres": "Adres",
-    "isTel": "İş Telefonu",
-    "burotel": "Büro Telefonu",
-    "YETKİLİ": "Yetkili",
-}
+st.markdown(
+    """
+    <style>
+    .baslik {
+        text-align: center;
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+    .altbaslik {
+        text-align: center;
+        color: #6b7280;
+        margin-bottom: 2rem;
+    }
+    div[data-testid="stFileUploaderDropzone"] {
+        border: 2px dashed #4f46e5;
+        border-radius: 16px;
+        padding: 2rem;
+        background-color: #f5f6ff;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------------
 # BAŞLIK
 # ------------------------------------------------------------
-st.title(" MTSO Sorgu Portalı")
-st.caption(f"Toplam {len(df):,} üye kaydı arasında arama yapabilirsiniz.")
-
-st.divider()
+st.markdown('<div class="baslik">📁 Sorgu Paneli</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="altbaslik">Bir Excel dosyası yükleyin, ardından aramak istediğiniz kaydı yazın</div>',
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------------
-# ARAMA ALANLARI
+# 1) BÜYÜK, ORTALANMIŞ DOSYA YÜKLEME ŞABLONU
 # ------------------------------------------------------------
-sekme_genel, sekme_detay = st.tabs([" Genel Arama", " Detaylı Arama"])
+yuklenen_dosya = st.file_uploader(
+    "Excel dosyanızı buraya sürükleyin ya da seçmek için tıklayın",
+    type=["xlsx", "xls"],
+    label_visibility="visible",
+)
 
-# ---- 1) GENEL ARAMA (örnek koddaki mantığın gelişmiş hali) ----
-with sekme_genel:
-    arama_terimi = st.text_input(
-        "Ünvan, sicil no, adres veya yetkili adı girin:",
-        placeholder="Örn: VURUŞKAN, 8494, AKDENİZ ...",
+# ------------------------------------------------------------
+# 2) SABİT ARAMA ÇUBUĞU (dosya yüklenmese de görünür durur)
+# ------------------------------------------------------------
+st.write("")
+arama_terimi = st.text_input(
+    "🔍 Arama",
+    placeholder="Aramak istediğiniz firma / kelimeyi yazın...",
+    disabled=(yuklenen_dosya is None),
+    label_visibility="collapsed",
+)
+
+# ------------------------------------------------------------
+# 3) DOSYA YOKSA BİLGİLENDİRME, VARSA OKU
+# ------------------------------------------------------------
+if yuklenen_dosya is None:
+    st.info("Arama yapabilmek için önce yukarıdan bir Excel dosyası yükleyin.")
+    st.stop()
+
+try:
+    df = pd.read_excel(yuklenen_dosya)
+except Exception as hata:
+    st.error(f"Dosya okunamadı, lütfen geçerli bir Excel dosyası yükleyin. Hata: {hata}")
+    st.stop()
+
+df = df.fillna("")
+
+st.success(f"'{yuklenen_dosya.name}' yüklendi — {len(df):,} satır, {len(df.columns)} sütun bulundu.")
+
+# ------------------------------------------------------------
+# 4) ARAMA MANTIĞI
+# ------------------------------------------------------------
+if arama_terimi:
+    sonuclar = df[
+        df.astype(str)
+        .apply(lambda satir: satir.str.contains(arama_terimi, case=False, na=False))
+        .any(axis=1)
+    ]
+    baslik_metni = f"🔎 '{arama_terimi}' için {len(sonuclar):,} sonuç bulundu"
+else:
+    sonuclar = df
+    baslik_metni = f"📋 Tüm kayıtlar ({len(sonuclar):,} satır)"
+
+# ------------------------------------------------------------
+# 5) SONUÇLAR — AÇILIR PANELDE (dosya/arama değiştikçe otomatik açık)
+# ------------------------------------------------------------
+with st.expander(baslik_metni, expanded=True):
+    st.dataframe(sonuclar, use_container_width=True, hide_index=True)
+
+    csv_veri = sonuclar.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="📥 Sonuçları CSV olarak indir",
+        data=csv_veri,
+        file_name="sorgu_sonuclari.csv",
+        mime="text/csv",
     )
 
-    if arama_terimi:
-        sonuclar = df[
-            df.astype(str)
-            .apply(lambda satir: satir.str.contains(arama_terimi, case=False, na=False))
-            .any(axis=1)
-        ]
-    else:
-        sonuclar = df
+    # --------------------------------------------------------
+    # 6) DETAY GÖRÜNÜMÜ (hangi sütunlar geleceği bilinmediği için
+    #    her satırı ilk birkaç sütunundan oluşan bir etiketle listeliyoruz)
+    # --------------------------------------------------------
+    if len(sonuclar) > 0:
+        st.divider()
+        st.markdown("**Bir kaydın tüm ayrıntılarını görmek için seçin:**")
 
-# ---- 2) DETAYLI ARAMA (alan alan filtreleme) ----
-with sekme_detay:
-    col1, col2 = st.columns(2)
-    with col1:
-        f_unvan = st.text_input("Ünvan içinde ara")
-        f_sicil = st.text_input("Ticaret Sicil No")
-        f_oda_sicil = st.text_input("Oda Sicil No")
-    with col2:
-        f_adres = st.text_input("Adres içinde ara (ör: ilçe adı)")
-        f_yetkili = st.text_input("Yetkili adı içinde ara")
+        onizleme_sutun_sayisi = min(3, len(sonuclar.columns))
 
-    detay_sonuc = df.copy()
-    if f_unvan:
-        detay_sonuc = detay_sonuc[detay_sonuc["unvan"].str.contains(f_unvan, case=False, na=False)]
-    if f_sicil:
-        detay_sonuc = detay_sonuc[detay_sonuc["ticaretSicilNo"].astype(str).str.contains(f_sicil)]
-    if f_oda_sicil:
-        detay_sonuc = detay_sonuc[detay_sonuc["uyeOdaSicilNo"].astype(str).str.contains(f_oda_sicil)]
-    if f_adres:
-        detay_sonuc = detay_sonuc[detay_sonuc["adres"].str.contains(f_adres, case=False, na=False)]
-    if f_yetkili:
-        detay_sonuc = detay_sonuc[detay_sonuc["YETKİLİ"].str.contains(f_yetkili, case=False, na=False)]
+        def satir_etiketi(satir):
+            parcalar = [str(satir[sutun]) for sutun in sonuclar.columns[:onizleme_sutun_sayisi]]
+            return " — ".join(p for p in parcalar if p)
 
-    detay_aktif = any([f_unvan, f_sicil, f_oda_sicil, f_adres, f_yetkili])
+        secenekler = {"— Kayıt seçin —": None}
+        for orijinal_index, satir in sonuclar.iterrows():
+            etiket = satir_etiketi(satir) or f"Kayıt #{orijinal_index}"
+            secenekler[f"{etiket}"] = orijinal_index
 
-# Hangi sekme kullanıldıysa onun sonucunu göster
-gosterilecek = detay_sonuc if detay_aktif else sonuclar
+        secilen_etiket = st.selectbox("Kayıt", list(secenekler.keys()), label_visibility="collapsed")
+        secilen_index = secenekler[secilen_etiket]
 
-st.divider()
-
-# ------------------------------------------------------------
-# SONUÇLAR
-# ------------------------------------------------------------
-st.subheader(f"Sonuçlar ({len(gosterilecek):,} kayıt)")
-
-gosterim_df = gosterilecek.rename(columns=SUTUN_ADLARI)
-
-secim = st.dataframe(
-    gosterim_df,
-    use_container_width=True,
-    hide_index=True,
-    on_select="rerun",
-    selection_mode="single-row",
-)
-
-# ------------------------------------------------------------
-# DETAY PANELİ (bir satıra tıklanınca açılır)
-# ------------------------------------------------------------
-secili_satirlar = secim.selection.rows if secim and secim.selection else []
-if secili_satirlar:
-    secili_index = secili_satirlar[0]
-    secili_kayit = gosterilecek.iloc[secili_index]
-
-    st.divider()
-    st.subheader(f" Detay: {secili_kayit['unvan']}")
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**Ticaret Sicil No:** {secili_kayit['ticaretSicilNo']}")
-        st.markdown(f"**Oda Sicil No:** {secili_kayit['uyeOdaSicilNo']}")
-        st.markdown(f"**Yetkili:** {secili_kayit['YETKİLİ'] or '—'}")
-    with c2:
-        st.markdown(f"**İş Telefonu:** {secili_kayit['isTel'] or '—'}")
-        st.markdown(f"**Büro Telefonu:** {secili_kayit['burotel'] or '—'}")
-    st.markdown(f"**Adres:** {secili_kayit['adres']}")
-
-# ------------------------------------------------------------
-# İNDİRME BUTONU
-# ------------------------------------------------------------
-csv_veri = gosterim_df.to_csv(index=False).encode("utf-8-sig")
-st.download_button(
-    label="📥 Sonuçları CSV olarak indir",
-    data=csv_veri,
-    file_name="sorgu_sonuclari.csv",
-    mime="text/csv",
-)
+        if secilen_index is not None:
+            secili_satir = sonuclar.loc[secilen_index]
+            st.markdown("#### 📋 Kayıt Detayı")
+            for sutun_adi in sonuclar.columns:
+                deger = secili_satir[sutun_adi]
+                st.markdown(f"**{sutun_adi}:** {deger if str(deger).strip() else '—'}")
