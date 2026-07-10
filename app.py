@@ -100,7 +100,7 @@ yuklenen_dosya = st.file_uploader(
 st.write("")
 arama_terimi = st.text_input(
     "🔍 Arama",
-    placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... ",
+    placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... (büyük-küçük harf, boşluk önemli değil)",
     disabled=(yuklenen_dosya is None),
     label_visibility="collapsed",
 )
@@ -119,6 +119,24 @@ except Exception as hata:
     st.stop()
 
 df = df.fillna("")
+
+
+def hucreyi_metne_cevir(deger):
+    """Sayıları (özellikle telefon/sicil no gibi tam sayı olması gerekenleri)
+    '3244540600.0' yerine '3244540600' şeklinde, boş hücreleri de '' olarak
+    düzgün metne çevirir. Bu sayede tablo hem hatasız görüntülenir hem de
+    sayılar çirkin görünmez."""
+    if deger == "" or pd.isna(deger):
+        return ""
+    if isinstance(deger, float) and deger.is_integer():
+        return str(int(deger))
+    return str(deger)
+
+
+# Streamlit'in tabloyu ekranda gösterebilmesi için (Arrow formatı), tüm
+# hücreleri metne çeviriyoruz. Aksi halde bir sütunda hem sayı hem boş
+# hücre (örn. telefon numarası sütunu) karışık olduğunda uygulama çöküyor.
+df = df.map(hucreyi_metne_cevir)
 
 st.success(f"'{yuklenen_dosya.name}' yüklendi — {len(df):,} satır, {len(df.columns)} sütun bulundu.")
 
