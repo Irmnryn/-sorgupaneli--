@@ -125,7 +125,26 @@ if not st.user.is_logged_in:
     sol, orta, sag = st.columns([1, 1.3, 1])
     with orta:
         with st.container(border=True):
-            if not st.session_state.giris_captcha_dogrulandi:
+            dogrulandi = st.session_state.giris_captcha_dogrulandi
+
+            # ---- ÜSTTE: Google ile Devam Et (doğrulanana kadar pasif) ----
+            st.markdown('<div class="giris-baslik">🔑 Giriş Yap</div>', unsafe_allow_html=True)
+            if st.button(
+                "Google ile Devam Et",
+                use_container_width=True,
+                type="primary",
+                disabled=not dogrulandi,
+            ):
+                st.login()
+            if not dogrulandi:
+                st.caption("Bu buton, aşağıdaki doğrulamayı tamamlayınca aktif olacak.")
+            else:
+                st.success("Doğrulama tamamlandı ✅ — artık giriş yapabilirsiniz.")
+
+            st.divider()
+
+            # ---- ALTTA: Güvenlik Doğrulaması ----
+            if not dogrulandi:
                 st.markdown('<div class="giris-baslik">🔒 Güvenlik Doğrulaması</div>', unsafe_allow_html=True)
                 st.markdown(
                     f'<div class="giris-soru">{st.session_state.giris_captcha_a} '
@@ -133,20 +152,25 @@ if not st.user.is_logged_in:
                     unsafe_allow_html=True,
                 )
                 with st.form("giris_captcha_formu"):
-                    cevap = st.number_input(
+                    cevap_metni = st.text_input(
                         "Cevabınız",
                         key="giris_captcha_cevap",
-                        step=1,
-                        format="%d",
+                        placeholder="Cevabı buraya yazın",
                         label_visibility="collapsed",
                     )
                     dogrula_butonu = st.form_submit_button(
-                        "Doğrula ve Devam Et", use_container_width=True, type="primary"
+                        "Doğrula", use_container_width=True
                     )
 
                 if dogrula_butonu:
                     dogru_cevap = st.session_state.giris_captcha_a + st.session_state.giris_captcha_b
-                    if int(cevap) == dogru_cevap:
+                    girilen_temiz = (cevap_metni or "").strip()
+                    try:
+                        girilen_sayi = int(girilen_temiz)
+                    except ValueError:
+                        girilen_sayi = None
+
+                    if girilen_sayi is not None and girilen_sayi == dogru_cevap:
                         st.session_state.giris_captcha_dogrulandi = True
                         st.rerun()
                     else:
@@ -154,11 +178,6 @@ if not st.user.is_logged_in:
                         # Yeni soru üret
                         st.session_state.giris_captcha_a = random.randint(1, 20)
                         st.session_state.giris_captcha_b = random.randint(1, 20)
-            else:
-                st.markdown('<div class="giris-baslik">🔑 Giriş Yap</div>', unsafe_allow_html=True)
-                st.success("Doğrulama tamamlandı, artık giriş yapabilirsiniz ✅")
-                if st.button("Google ile Giriş Yap", use_container_width=True, type="primary"):
-                    st.login()
 
     st.stop()
 
