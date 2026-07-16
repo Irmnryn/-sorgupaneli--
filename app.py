@@ -106,15 +106,15 @@ if "arama_sayaci" not in st.session_state:
     st.session_state.arama_sayaci = 0
 if "captcha_dogrulandi" not in st.session_state:
     st.session_state.captcha_dogrulandi = True
-if "arama_terimi" not in st.session_state:
-    st.session_state.arama_terimi = ""
+if "son_arama" not in st.session_state:
+    st.session_state.son_arama = ""
 
 DOGRULAMA_ESIGI = 8  # her 8 aramada bir doğrulama sorusu çıkar
 
 with st.form("arama_formu", clear_on_submit=False):
     girilen_terim = st.text_input(
         "🔍 Arama",
-        value=st.session_state.arama_terimi,
+        key="arama_kutusu",
         placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... (büyük-küçük harf, boşluk önemli değil)",
         disabled=(yuklenen_dosya is None),
         label_visibility="collapsed",
@@ -122,7 +122,7 @@ with st.form("arama_formu", clear_on_submit=False):
     ara_butonu = st.form_submit_button("Ara", disabled=(yuklenen_dosya is None))
 
 if ara_butonu:
-    st.session_state.arama_terimi = girilen_terim
+    st.session_state.son_arama = girilen_terim
     if girilen_terim:
         st.session_state.arama_sayaci += 1
         if st.session_state.arama_sayaci % DOGRULAMA_ESIGI == 0:
@@ -131,7 +131,7 @@ if ara_butonu:
             st.session_state.captcha_a = random.randint(1, 20)
             st.session_state.captcha_b = random.randint(1, 20)
 
-arama_terimi = st.session_state.arama_terimi
+arama_terimi = st.session_state.son_arama
 
 # ------------------------------------------------------------
 # 2b) DOĞRULAMA (BASİT CAPTCHA) — belirli sayıda aramadan sonra çıkar
