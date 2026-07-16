@@ -1,3 +1,4 @@
+import random
 import re
 import streamlit as st
 import pandas as pd
@@ -95,15 +96,59 @@ yuklenen_dosya = st.file_uploader(
 )
 
 # ------------------------------------------------------------
-# 2) SABİT ARAMA ÇUBUĞU
+# 2) SABİT ARAMA ÇUBUĞU (form: sadece 'Ara'ya basınca ya da Enter'a
+#    basınca çalışır, her tuş vuruşunda değil — bu sayede arama sayısını
+#    doğru sayabiliyoruz)
 # ------------------------------------------------------------
 st.write("")
-arama_terimi = st.text_input(
-    "🔍 Arama",
-    placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... (büyük-küçük harf, boşluk önemli değil)",
-    disabled=(yuklenen_dosya is None),
-    label_visibility="collapsed",
-)
+
+if "arama_sayaci" not in st.session_state:
+    st.session_state.arama_sayaci = 0
+if "captcha_dogrulandi" not in st.session_state:
+    st.session_state.captcha_dogrulandi = True
+if "arama_terimi" not in st.session_state:
+    st.session_state.arama_terimi = ""
+
+DOGRULAMA_ESIGI = 8  # her 8 aramada bir doğrulama sorusu çıkar
+
+with st.form("arama_formu", clear_on_submit=False):
+    girilen_terim = st.text_input(
+        "🔍 Arama",
+        value=st.session_state.arama_terimi,
+        placeholder="Aramak istediğiniz firma / kişi / sicil no yazın... (büyük-küçük harf, boşluk önemli değil)",
+        disabled=(yuklenen_dosya is None),
+        label_visibility="collapsed",
+    )
+    ara_butonu = st.form_submit_button("Ara", disabled=(yuklenen_dosya is None))
+
+if ara_butonu:
+    st.session_state.arama_terimi = girilen_terim
+    if girilen_terim:
+        st.session_state.arama_sayaci += 1
+        if st.session_state.arama_sayaci % DOGRULAMA_ESIGI == 0:
+            st.session_state.captcha_dogrulandi = False
+            # Yeni bir doğrulama sorusu üret
+            st.session_state.captcha_a = random.randint(1, 20)
+            st.session_state.captcha_b = random.randint(1, 20)
+
+arama_terimi = st.session_state.arama_terimi
+
+# ------------------------------------------------------------
+# 2b) DOĞRULAMA (BASİT CAPTCHA) — belirli sayıda aramadan sonra çıkar
+# ------------------------------------------------------------
+if not st.session_state.captcha_dogrulandi:
+    st.warning("Devam etmeden önce lütfen aşağıdaki kısa doğrulamayı tamamlayın.")
+    with st.form("captcha_formu"):
+        soru = f"Doğrulama: {st.session_state.captcha_a} + {st.session_state.captcha_b} = ?"
+        cevap = st.number_input(soru, step=1, format="%d")
+        dogrula_butonu = st.form_submit_button("Doğrula ve devam et")
+    if dogrula_butonu:
+        if cevap == st.session_state.captcha_a + st.session_state.captcha_b:
+            st.session_state.captcha_dogrulandi = True
+            st.rerun()
+        else:
+            st.error("Cevap yanlış, lütfen tekrar deneyin.")
+    st.stop()
 
 # ------------------------------------------------------------
 # 3) DOSYA YOKSA BİLGİLENDİRME, VARSA OKU
