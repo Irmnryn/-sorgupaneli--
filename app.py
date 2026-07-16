@@ -62,6 +62,21 @@ st.markdown(
 )
 
 # ------------------------------------------------------------
+# GİRİŞ TESTİ (geçici — sadece Google girişinin çalıştığını doğrulamak için)
+# ------------------------------------------------------------
+st.write("### Giriş testi")
+if not st.user.is_logged_in:
+    st.write("Henüz giriş yapmadınız.")
+    if st.button("Google ile giriş yap"):
+        st.login()
+    st.stop()
+else:
+    st.success(f"Giriş başarılı! Merhaba, {st.user.name} ({st.user.email})")
+    if st.button("Çıkış yap"):
+        st.logout()
+    st.stop()
+
+# ------------------------------------------------------------
 # TÜRKÇE BÜYÜK/KÜÇÜK HARF + BOŞLUK DUYARSIZ NORMALLEŞTİRME
 # ------------------------------------------------------------
 TR_DEGISIM = {"İ": "i", "I": "ı", "Ş": "ş", "Ğ": "ğ", "Ü": "ü", "Ö": "ö", "Ç": "ç"}
