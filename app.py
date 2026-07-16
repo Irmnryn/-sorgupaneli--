@@ -56,12 +56,31 @@ st.markdown(
     div[data-testid="stDataFrame"] * {
         font-size: 1.02rem !important;
     }
-    /* Giriş ekranı kutusu */
-    .giris-kutu {
-        border: 2px solid #4f46e5;
-        border-radius: 16px;
-        padding: 2rem;
-        background-color: #f5f6ff;
+    /* Giriş ekranı kutusu (st.container(border=True) için) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border: 2px solid #4f46e5 !important;
+        border-radius: 16px !important;
+        background-color: #f5f6ff !important;
+        padding: 0.5rem 0.5rem 1.5rem 0.5rem !important;
+    }
+    .giris-baslik {
+        text-align: center;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin: 0.8rem 0 1.2rem 0;
+    }
+    .giris-soru {
+        text-align: center;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #4f46e5;
+        margin-bottom: 0.6rem;
+    }
+    /* Giriş ekranındaki sayı kutusunu da ortala ve büyüt */
+    div[data-testid="stNumberInput"] input {
+        font-size: 1.4rem !important;
+        text-align: center !important;
+        border-radius: 12px !important;
     }
     </style>
     """,
@@ -105,36 +124,41 @@ if not st.user.is_logged_in:
 
     sol, orta, sag = st.columns([1, 1.3, 1])
     with orta:
-        st.markdown('<div class="giris-kutu">', unsafe_allow_html=True)
-
-        if not st.session_state.giris_captcha_dogrulandi:
-            st.markdown("#### 🔒 Güvenlik Doğrulaması")
-            with st.form("giris_captcha_formu"):
-                soru = (
-                    f"Doğrulama: {st.session_state.giris_captcha_a} + "
-                    f"{st.session_state.giris_captcha_b} = ?"
+        with st.container(border=True):
+            if not st.session_state.giris_captcha_dogrulandi:
+                st.markdown('<div class="giris-baslik">🔒 Güvenlik Doğrulaması</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="giris-soru">{st.session_state.giris_captcha_a} '
+                    f'+ {st.session_state.giris_captcha_b} = ?</div>',
+                    unsafe_allow_html=True,
                 )
-                cevap = st.number_input(soru, key="giris_captcha_cevap", step=1, format="%d")
-                dogrula_butonu = st.form_submit_button("Doğrula", use_container_width=True)
+                with st.form("giris_captcha_formu"):
+                    cevap = st.number_input(
+                        "Cevabınız",
+                        key="giris_captcha_cevap",
+                        step=1,
+                        format="%d",
+                        label_visibility="collapsed",
+                    )
+                    dogrula_butonu = st.form_submit_button(
+                        "Doğrula ve Devam Et", use_container_width=True, type="primary"
+                    )
 
-            if dogrula_butonu:
-                dogru_cevap = st.session_state.giris_captcha_a + st.session_state.giris_captcha_b
-                if int(cevap) == dogru_cevap:
-                    st.session_state.giris_captcha_dogrulandi = True
-                    st.rerun()
-                else:
-                    st.error("Cevap yanlış, lütfen tekrar deneyin.")
-                    # Yeni soru üret
-                    st.session_state.giris_captcha_a = random.randint(1, 20)
-                    st.session_state.giris_captcha_b = random.randint(1, 20)
-        else:
-            st.success("Doğrulama tamamlandı ✅")
-            st.write("")
-            st.markdown("#### 🔑 Giriş")
-            if st.button("Google ile Giriş Yap", use_container_width=True, type="primary"):
-                st.login()
-
-        st.markdown("</div>", unsafe_allow_html=True)
+                if dogrula_butonu:
+                    dogru_cevap = st.session_state.giris_captcha_a + st.session_state.giris_captcha_b
+                    if int(cevap) == dogru_cevap:
+                        st.session_state.giris_captcha_dogrulandi = True
+                        st.rerun()
+                    else:
+                        st.error("Cevap yanlış, lütfen tekrar deneyin.")
+                        # Yeni soru üret
+                        st.session_state.giris_captcha_a = random.randint(1, 20)
+                        st.session_state.giris_captcha_b = random.randint(1, 20)
+            else:
+                st.markdown('<div class="giris-baslik">🔑 Giriş Yap</div>', unsafe_allow_html=True)
+                st.success("Doğrulama tamamlandı, artık giriş yapabilirsiniz ✅")
+                if st.button("Google ile Giriş Yap", use_container_width=True, type="primary"):
+                    st.login()
 
     st.stop()
 
