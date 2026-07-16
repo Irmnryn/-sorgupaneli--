@@ -140,10 +140,10 @@ if not st.session_state.captcha_dogrulandi:
     st.warning("Devam etmeden önce lütfen aşağıdaki kısa doğrulamayı tamamlayın.")
     with st.form("captcha_formu"):
         soru = f"Doğrulama: {st.session_state.captcha_a} + {st.session_state.captcha_b} = ?"
-        cevap = st.number_input(soru, step=1, format="%d")
+        cevap = st.number_input(soru, key="captcha_cevap", step=1, format="%d")
         dogrula_butonu = st.form_submit_button("Doğrula ve devam et")
     if dogrula_butonu:
-        if cevap == st.session_state.captcha_a + st.session_state.captcha_b:
+        if int(cevap) == st.session_state.captcha_a + st.session_state.captcha_b:
             st.session_state.captcha_dogrulandi = True
             st.rerun()
         else:
